@@ -49,6 +49,9 @@ class L1ScoutingDataset(Dataset):
             self.train_variables = self.egamma_variables
             self.target_variables = self.egamma_target_rel
 
+        self.num_train_variables = len(self.train_variables)
+        self.num_target_variables = len(self.target_variables)
+
     def __len__(self):
         return len(self.file_list)
     
