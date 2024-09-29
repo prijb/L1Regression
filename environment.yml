@@ -211,6 +211,7 @@ dependencies:
 - uproot=5.3.12=ha770c72_0
 - uproot-base=5.3.12=pyhd8ed1ab_0
 - urllib3=2.2.3=pyhd8ed1ab_0
+- vector=1.5.1=pyhd8ed1ab_0
 - wayland=1.23.1=h3e06ad9_0
 - wayland-protocols=1.37=hd8ed1ab_0
 - wcwidth=0.2.13=pyhd8ed1ab_0

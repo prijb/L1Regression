@@ -159,7 +159,7 @@ dnn_model_params = {
     "input_size": object_dataset.num_train_variables,
     "hidden_size": 128,
     "output_size": object_dataset.num_target_variables,
-    "learning_rate": 1e-5,
+    "learning_rate": 1e-3,
     "num_epochs": 100
 }
 
