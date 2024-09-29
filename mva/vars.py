@@ -1,6 +1,6 @@
 #This module defines the input variables
 
-JET_VARS = ["Jet_pt", "Jet_eta", "Jet_phi", "Jet_relJetIso", "Jet_relMuonIso", "Jet_relEGammaIso"]
+JET_VARS = ["Jet_pt", "Jet_eta", "Jet_phi", "Jet_relMuonIso", "Jet_relEGammaIso"]
 MUON_VARS = ["Muon_pt", "Muon_etaAtVtx", "Muon_phiAtVtx", "Muon_qual", "Muon_hwCharge"]
 #MUON_VARS = ["Muon_pt", "Muon_etaAtVtx", "Muon_phiAtVtx", "Muon_qual", "Muon_hwCharge", "Muon_relJetIso", "Muon_relMuonIso", "Muon_relEGammaIso"]
 EGAMMA_VARS = ["EGamma_pt", "EGamma_eta", "EGamma_phi", "EGamma_relJetIso", "EGamma_relMuonIso", "EGamma_relEGammaIso", "EGamma_Iso"]

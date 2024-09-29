@@ -1,3 +1,4 @@
+#This code loads batches at a per object level as opposed to a per file level
 #This is the master script for training the mva
 import uproot   
 import awkward as ak
@@ -14,6 +15,9 @@ import mplhep as hep
 import hist
 plt.style.use(hep.style.CMS)
 plt.rcParams["figure.figsize"] = (12.5, 10)
+
+#Memory profiling
+from memory_profiler import profile
 
 os.getcwd()
 
@@ -58,33 +62,81 @@ elif object_type == "egamma":
     object_transform = transform_egamma
 
 ################# Dataset loading #################
-
-object_dataset = L1ScoutingDataset(dir_path="/vols/cms/pb4918/L1Scouting/Sep24/PtRegression/CMSSW_14_1_0_pre4/src/outputs/sample", var_dict=var_dict, transform=object_transform, object_type=object_type)
+object_dataset = L1ScoutingObject(dir_path="/vols/cms/pb4918/L1Scouting/Sep24/PtRegression/CMSSW_14_1_0_pre4/src/outputs/sample", var_dict=var_dict, transform=object_transform, object_type=object_type, use_cache=True, cache_path=f"/vols/cms/pb4918/L1Scouting/Sep24/PtRegression/CMSSW_14_1_0_pre4/src/scripts/training/cache_{object_type}")
+num_objects = len(object_dataset)
 
 #Split into train and test
-train_dataset, test_dataset = torch.utils.data.random_split(object_dataset, [0.5, 0.5])
+print("Loading train and test datasets")
+num_train = int(0.7*num_objects)
+num_test = num_objects - num_train
+train_dataset, test_dataset = torch.utils.data.random_split(object_dataset, [num_train, num_test])
 
 #Data loader
-train_loader = DataLoader(train_dataset, batch_size=10, shuffle=True, collate_fn=collate_fn)
-test_loader = DataLoader(test_dataset, batch_size=10, shuffle=True, collate_fn=collate_fn)
+#train_loader = DataLoader(train_dataset, batch_size=256, shuffle=True)
+#test_loader = DataLoader(test_dataset, batch_size=256, shuffle=True)
 
-#Statistics (mean, std) requires full dataset
-full_loader = DataLoader(object_dataset, batch_size=object_dataset.__len__(), shuffle=False, collate_fn=collate_fn)
+print("Setting train and test loaders")
+train_loader = DataLoader(train_dataset, batch_size=256, shuffle=True)
+test_loader = DataLoader(test_dataset, batch_size=256, shuffle=True)
 
-X_full, y_full = next(iter(full_loader))
+#Statistics (mean, std) requires full dataset which is loaded in chunks of size 10000
+print("Setting full dataset loader")
+
+"""
+full_loader_batch_size = 1000
+full_loader = DataLoader(object_dataset, batch_size=full_loader_batch_size, shuffle=False)
+
+print("Computing mean and std from full dataset")
+
+total_sum_X = 0.0
+total_sum_y = 0.0
+total_sum_X2 = 0.0
+total_sum_y2 = 0.0
+total_count = 0
+
+num_iterations = num_objects//full_loader_batch_size
+num_iterations = 10
+for i in range(num_iterations):
+    print("Estimating statistics from iteration {}/{}".format(i+1, num_iterations))
+    X_batch, y_batch = next(iter(full_loader))
+
+    total_count += X_batch.size(0)
+    total_sum_X += X_batch.sum(dim=0)
+    total_sum_y += y_batch.sum(dim=0)
+    total_sum_X2 += (X_batch**2).sum(dim=0)
+    total_sum_y2 += (y_batch**2).sum(dim=0)
+
+X_mean = total_sum_X/total_count
+y_mean = total_sum_y/total_count
+X_std = torch.sqrt(total_sum_X2/total_count - X_mean**2)
+y_std = torch.sqrt(total_sum_y2/total_count - y_mean**2)
+"""
+
+#print("Getting full dataset iteration")
+#X_full, y_full = next(iter(full_loader))
+#Get the mean and std
+#X_mean = X_full.mean(dim=0)
+#X_std = X_full.std(dim=0)
+#y_mean = y_full.mean(dim=0)
+#y_std = y_full.std(dim=0)
+
+#Using the dataset loader and not the object level one
+object_dataset_full = L1ScoutingDataset(dir_path="/vols/cms/pb4918/L1Scouting/Sep24/PtRegression/CMSSW_14_1_0_pre4/src/outputs/sample", var_dict=var_dict, transform=object_transform, object_type=object_type)
+X_full, y_full = next(iter(DataLoader(object_dataset_full, batch_size=10, shuffle=False, collate_fn=collate_fn))) 
 X_full = X_full.flatten(start_dim=0, end_dim=1)
 y_full = y_full.flatten(start_dim=0, end_dim=1)
 
-#Filter out zero pT objects (aka rows that are padded out)
+#Filter out zero rows
+print("Computing mean and std from full dataset")
 mask = X_full[:, 0] > 0
 X_full = X_full[mask]
 y_full = y_full[mask]
 
-#Get the mean and std
 X_mean = X_full.mean(dim=0)
 X_std = X_full.std(dim=0)
 y_mean = y_full.mean(dim=0)
 y_std = y_full.std(dim=0)
+
 
 print("\n Dataset statistics")
 print(f"X mean: {X_mean}, X std: {X_std}")
@@ -107,8 +159,8 @@ dnn_model_params = {
     "input_size": object_dataset.num_train_variables,
     "hidden_size": 128,
     "output_size": object_dataset.num_target_variables,
-    "learning_rate": 0.001,
-    "num_epochs": 50
+    "learning_rate": 1e-5,
+    "num_epochs": 100
 }
 
 
@@ -129,14 +181,6 @@ if mva_mode == "dnn":
     #Training loop  
     for epoch in range(num_epochs):
         X_train, y_train = next(iter(train_loader))
-        #Flatten
-        X_train = X_train.flatten(start_dim=0, end_dim=1)
-        y_train = y_train.flatten(start_dim=0, end_dim=1)
-
-        #Filter out zero pT objects (aka rows that are padded out)
-        mask = X_train[:, 0] > 0
-        X_train = X_train[mask]
-        y_train = y_train[mask]
 
         #Normalise using full dataset mean and std
         X_train = (X_train - X_mean)/X_std
@@ -155,14 +199,6 @@ if mva_mode == "dnn":
         test_loss = 0
         with torch.no_grad():
             X_test, y_test = next(iter(test_loader))
-            #Flatten
-            X_test = X_test.flatten(start_dim=0, end_dim=1)
-            y_test = y_test.flatten(start_dim=0, end_dim=1)
-
-            #Filter out zero pT objects
-            mask = X_test[:, 0] > 0
-            X_test = X_test[mask]
-            y_test = y_test[mask]
             
             #Normalise using full dataset mean and std
             X_test = (X_test - X_mean)/X_std
@@ -192,15 +228,9 @@ if mva_mode == "dnn":
 
     #Get the prediction
     with torch.no_grad():
-        X_test, y_test = next(iter(test_loader))
-        #Flatten
-        X_test = X_test.flatten(start_dim=0, end_dim=1)
-        y_test = y_test.flatten(start_dim=0, end_dim=1)
-
-        #Filter out zero pT objects
-        mask = X_test[:, 0] > 0
-        X_test = X_test[mask]
-        y_test = y_test[mask]
+        #Use the full dataset for evaluation
+        eval_loader = DataLoader(test_dataset, batch_size=len(test_dataset), shuffle=False)
+        X_test, y_test = next(iter(eval_loader))
 
         #Normalise using full dataset mean and std
         X_test = (X_test - X_mean)/X_std
@@ -215,7 +245,6 @@ if mva_mode == "dnn":
         y_test = y_test*y_std + y_mean
 
     
-
 ################ BDT training ###################
 if mva_mode == "bdt":
     print("Training BDT")
@@ -224,11 +253,7 @@ if mva_mode == "bdt":
     #Using only one "iteration"
     X_train, y_train = next(iter(train_loader))
     X_test, y_test = next(iter(test_loader))
-    #Flatten
-    X_train = X_train.flatten(start_dim=0, end_dim=1)
-    y_train = y_train.flatten(start_dim=0, end_dim=1)
-    X_test = X_test.flatten(start_dim=0, end_dim=1)
-    y_test = y_test.flatten(start_dim=0, end_dim=1)
+
     #Detach for BDT
     X_train = X_train.detach().numpy()
     y_train = y_train.detach().numpy()
@@ -296,8 +321,8 @@ h_obj_phi_pred_diff.fill(obj_pred_phi[pt_mask] - obj_true_phi[pt_mask])
 #Plot
 #pT
 fig, ax = plt.subplots()
-hep.histplot(h_obj_pt_reco_reldiff, ax=ax, histtype="step", flow=None, color='red', label='Reco')
-hep.histplot(h_obj_pt_pred_reldiff, ax=ax, histtype="step", flow=None, color='blue', label='Pred')
+hep.histplot(h_obj_pt_reco_reldiff, ax=ax, histtype="step", flow=None, color='red', label='Reco', density=True)
+hep.histplot(h_obj_pt_pred_reldiff, ax=ax, histtype="step", flow=None, color='blue', label='Pred', density=True)
 ax.set_xlabel("dpT/pT")
 ax.set_ylabel("Events")
 ax.legend()
@@ -306,8 +331,8 @@ plt.savefig(f"{plot_dir}/{object_type}_{mva_mode}_pt_reldiff.png")
 
 #eta
 fig, ax = plt.subplots()
-hep.histplot(h_obj_eta_reco_diff, ax=ax, histtype="step", flow=None, color='red', label='Reco')
-hep.histplot(h_obj_eta_pred_diff, ax=ax, histtype="step", flow=None, color='blue', label='Pred')
+hep.histplot(h_obj_eta_reco_diff, ax=ax, histtype="step", flow=None, color='red', label='Reco', density=True)
+hep.histplot(h_obj_eta_pred_diff, ax=ax, histtype="step", flow=None, color='blue', label='Pred', density=True)
 ax.set_xlabel("dEta")
 ax.set_ylabel("Events")
 ax.legend()
@@ -316,8 +341,8 @@ plt.savefig(f"{plot_dir}/{object_type}_{mva_mode}_eta_diff.png")
 
 #phi
 fig, ax = plt.subplots()
-hep.histplot(h_obj_phi_reco_diff, ax=ax, histtype="step", flow=None, color='red', label='Reco')
-hep.histplot(h_obj_phi_pred_diff, ax=ax, histtype="step", flow=None, color='blue', label='Pred')
+hep.histplot(h_obj_phi_reco_diff, ax=ax, histtype="step", flow=None, color='red', label='Reco', density=True)
+hep.histplot(h_obj_phi_pred_diff, ax=ax, histtype="step", flow=None, color='blue', label='Pred', density=True)
 ax.set_xlabel("dPhi")
 ax.set_ylabel("Events")
 ax.legend()

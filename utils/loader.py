@@ -9,8 +9,14 @@ import os
 import torch
 import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
+#Storage
+import pickle
+
+#Memory profiling
+from memory_profiler import profile
 
 class L1ScoutingDataset(Dataset):
+    #@profile
     def __init__(self, dir_path, var_dict, file_format="root", transform=None, target_transform=None, object_type="jet"):
         self.dir_path = dir_path
         self.var_dict = var_dict
@@ -52,9 +58,11 @@ class L1ScoutingDataset(Dataset):
         self.num_train_variables = len(self.train_variables)
         self.num_target_variables = len(self.target_variables)
 
+    #@profile
     def __len__(self):
         return len(self.file_list)
     
+    #@profile
     def __getitem__(self, idx):
         #Open file
         file_path = os.path.join(self.dir_path, self.file_list[idx])
@@ -65,7 +73,8 @@ class L1ScoutingDataset(Dataset):
         #Global filters
         filter_jet_saturation = ak.sum(events["Jet_pt"] > 1000, axis=-1) == 0
         filter_egamma_saturation = ak.sum(events["EGamma_pt"] > 255, axis=-1) == 0
-        filter_saturation = filter_jet_saturation & filter_egamma_saturation
+        filter_muon_saturation = ak.sum(events["Muon_pt"] > 245.5, axis=-1) == 0
+        filter_saturation = filter_jet_saturation & filter_egamma_saturation & filter_muon_saturation
         events = events[filter_saturation]
 
         #Inputs based on training and target variables
@@ -87,6 +96,51 @@ class L1ScoutingDataset(Dataset):
 
         return X_tensor, y_tensor
 
+    #Function to cache X_tensor and y_tensor
+    #@profile
+    def cache_file(self, file_path, output_path):
+        #Store the data in a dict
+        data_dict = {}
+
+        #Basically does the same thing as __getitem__ but stores the data as a pickle file
+        f = uproot.open(file_path)
+        t = f["Events"]
+        events = t.arrays(self.read_variables, library="ak")
+
+        #Global filters
+        filter_jet_saturation = ak.sum(events["Jet_pt"] > 1000, axis=-1) == 0
+        filter_egamma_saturation = ak.sum(events["EGamma_pt"] > 255, axis=-1) == 0
+        filter_muon_saturation = ak.sum(events["Muon_pt"] > 245.5, axis=-1) == 0
+        filter_saturation = filter_jet_saturation & filter_egamma_saturation & filter_muon_saturation
+        events = events[filter_saturation]
+
+        #Inputs based on training and target variables
+        data = events[self.train_variables + self.target_variables]
+
+        #Object specific filters
+        if self.transform:
+            data = self.transform(data)
+        
+        X = data[self.train_variables]
+        y = data[self.target_variables]
+
+        #Pandas and then tensor conversion
+        X = ak.to_dataframe(X)
+        y = ak.to_dataframe(y)
+
+        X_tensor = torch.tensor(X.values)
+        y_tensor = torch.tensor(y.values)
+
+        #Store the data in a dict
+        data_dict["X"] = X_tensor
+        data_dict["y"] = y_tensor
+
+        #Save the data
+        with open(output_path, "wb") as f:
+            pickle.dump(data_dict, f)
+        
+        return None
+
 #Padding due to variable number of events
 from torch.nn.utils.rnn import pad_sequence
 def collate_fn(batch):
@@ -99,7 +153,4 @@ def collate_fn(batch):
     y_batch_padded = pad_sequence(y_batch, batch_first=True, padding_value=0.0)
     
     return X_batch_padded, y_batch_padded
-
-
-
 
