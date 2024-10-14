@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 
 def transform_jet(events):
-    pt_cut = events["Jet_pt"] > 30
+    pt_cut = (events["Jet_pt"] > 30) & (events["Jet_pt"] < 300)
     events = events[pt_cut]
 
     #Remove events with no jets passing cuts
