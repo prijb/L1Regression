@@ -4,4 +4,7 @@ cachedir/
 cachedir/*
 test/
 test/*
+mva/pycache/
+scripts/pycache/
+utils/pycache/
 
