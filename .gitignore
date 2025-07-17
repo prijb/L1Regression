@@ -1,0 +1,7 @@
+plots/
+plots/*
+cachedir/
+cachedir/*
+test/
+test/*
+
