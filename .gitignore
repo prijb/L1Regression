@@ -4,7 +4,9 @@ cachedir/
 cachedir/*
 test/
 test/*
-mva/pycache/
-scripts/pycache/
-utils/pycache/
+mva/__pycache__/
+scripts/__pycache__/
+utils/__pycache__/
+submission/
+models
 

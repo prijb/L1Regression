@@ -20,44 +20,93 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')
 os.makedirs(f"{cwd}/plots/training", exist_ok=True)
 os.makedirs(f"{cwd}/plots/features", exist_ok=True)
 
+#sample = "ttbar"
+sample = "qcd_15to7000"
+
+# Plot the training features
+plot_features = False
+
+#train_cachedir = f"{cwd}/cachedir/{sample}/train"
+#valid_cachedir = f"{cwd}/cachedir/{sample}/validation"
+#test_cachedir = f"{cwd}/cachedir/{sample}/test"
+
+#train_cachedir = f"{cwd}/cachedir/ttbar/train"
+#valid_cachedir = f"{cwd}/cachedir/ttbar/validation"
+#test_cachedir = f"{cwd}/cachedir/qcd_15to7000/train"
+
+train_cachedir = f"{cwd}/cachedir/qcd_15to7000/train"
+valid_cachedir = f"{cwd}/cachedir/qcd_15to7000/validation"
+test_cachedir = f"{cwd}/cachedir/ttbar/train"
+
 from utils.preprocess import Preprocessor
 from utils.bdt_dataset import BDTDataset
 
-input_files = os.listdir("test")
-input_files = [os.path.join("test", file) for file in input_files if file.endswith(".root")]
+input_files = ["dummy_file.root"]
 
-preprocessor = Preprocessor(input_files, batch_size=100000, use_existing_cache=True)
-preprocessor.cache_files()
-X, y, w = preprocessor.get_data_dict()
+preprocessor_train = Preprocessor(input_files, batch_size=100000, use_existing_cache=True, cache_dir=train_cachedir)
+preprocessor_valid = Preprocessor(input_files, batch_size=100000, use_existing_cache=True, cache_dir=valid_cachedir)
+preprocessor_test = Preprocessor(input_files, batch_size=100000, use_existing_cache=True, cache_dir=test_cachedir)
+
+X_train, y_train, w_train = preprocessor_train.get_data_dict()
+X_valid, y_valid, w_valid = preprocessor_valid.get_data_dict()
+X_test, y_test, w_test = preprocessor_test.get_data_dict()
 
 ############# Data exploration #################
-print(f"Loaded data with {len(X)} jets")
+print(f"Loaded training data with {len(X_train)} jets")
 import mplhep as hep
 plt.style.use(hep.style.CMS)
 
+if plot_features:
+    print("Plotting training features...")
+    jet_features_to_draw = ["pt", "eta", "phi", "muonRelIso", "egammaRelIso"]
+    global_features_to_draw = ["etSum", "htSum", "etMiss", "etMissPhi", "htMiss", "htMissPhi", "towerCount"]
+    target_features_to_draw = ["recojet_pt", "recojet_eta", "recojet_phi", "recojet_ptdiff", "recojet_ptratio", "recojet_etadiff", "recojet_phidiff", "recojet_btag"]
+
+    for feature in jet_features_to_draw:
+        fig, ax = plt.subplots()
+        plt.hist(X_train[feature], bins=100, histtype='step', label=f"L1Jet_{feature}")
+        plt.xlabel(f"L1Jet_{feature}")
+        plt.ylabel("Number of jets")
+        ax.set_yscale('log')
+        plt.savefig(f"plots/features/l1jet_{feature}.png")
+        plt.close()
+
+    for feature in global_features_to_draw:
+        fig, ax = plt.subplots()
+        plt.hist(X_train[feature], bins=100, histtype='step', label=f"{feature}")
+        plt.xlabel(f"{feature}")
+        plt.ylabel("Number of jets")
+        ax.set_yscale('log')
+        plt.savefig(f"plots/features/{feature}.png")
+        plt.close()
+
+    for feature in target_features_to_draw:
+        fig, ax = plt.subplots()
+        plt.hist(y_train[feature], bins=100, histtype='step', label=f"{feature}")
+        plt.xlabel(f"RecoJet_{feature}")
+        plt.ylabel("Number of jets")
+        ax.set_yscale('log')
+        plt.savefig(f"plots/features/recojet_{feature}.png")
+        plt.close()
+
 
 ############# BDT training #################
-#train_features = ["pt", "eta", "phi", "muonRelIso", "egammaRelIso", "etSum", "htSum", "etMiss", "etMissPhi", "htMiss", "htMissPhi", "towerCount"]
-train_features = ["pt", "eta", "phi", "towerCount", "etSum", "htSum"]
+#train_features = ["pt", "eta", "phi", "muonRelIso", "egammaRelIso", "etSum", "htSum", "etMiss", "etMissPhi", "htMiss", "htMissPhi", "towerCount", "muonIso", "egammaIso"]
+#train_features = ["pt", "eta", "phi", "egammaRelIso", "muonRelIso", "htSum", "htMiss", "towerCount"]
+train_features = ["pt", "eta", "phi", "egammaRelIso", "muonRelIso"]
 #train_features = ["pt", "eta", "phi"]
 #target_features = ["recojet_pt"]
 #target_features = ["recojet_ptdiff"]
-#target_features = ["recojet_ptratio"]
+target_features = ["recojet_ptratio"]
 #target_features = ["recojet_pt", "recojet_eta", "recojet_phi"]
-target_features = ["recojet_ptratio", "recojet_eta", "recojet_phi"]
+#target_features = ["recojet_ptratio", "recojet_eta", "recojet_phi"]
 
-# Create the BDT dataset
-bdt_dataset = BDTDataset(X, y, w, train_features, target_features)
+# Create the BDT datasets
+train_dataset = BDTDataset(X_train, y_train, w_train, train_features, target_features)
+val_dataset = BDTDataset(X_valid, y_valid, w_valid, train_features, target_features)
+test_dataset = BDTDataset(X_test, y_test, w_test, train_features, target_features)
 
-# Train validation test split of 50/30/20
-n_jets = len(bdt_dataset)
-n_train = int(0.5 * n_jets)
-n_val = int(0.3 * n_jets)
-n_test = n_jets - n_train - n_val
-
-train_dataset = Subset(bdt_dataset, list(range(n_train)))
-val_dataset = Subset(bdt_dataset, list(range(n_train, n_train + n_val)))
-test_dataset = Subset(bdt_dataset, list(range(n_train + n_val, n_jets)))
+n_jets = len(train_dataset) + len(val_dataset) + len(test_dataset)
 
 print(f"Train dataset size: {len(train_dataset)}")
 print(f"Validation dataset size: {len(val_dataset)}")
@@ -88,6 +137,9 @@ model.train([X_train, y_train, w_train], [X_val, y_val, w_val])
 epochs, results = model.evaluate(X_val, y_val)
 print(f"BDT training finished after {epochs} epochs")
 
+# Save the model
+model.save_model(f"models/bdt_model_{sample}.json")
+
 # Plot evaluation results
 if model.do_eval:
     print("Plotting evaluation results...")
@@ -110,6 +162,37 @@ if model.do_eval:
     ax.set_ylabel('MAE')
     ax.legend()
     plt.savefig(f"plots/training/bdt_mae.png")
+
+    # Plot the feature importances if there's only one target feature
+    if len(target_features) == 1:
+        from xgboost import plot_importance
+        feature_names_orig = model.model.get_booster().feature_names
+
+        # Total gain
+        model.model.get_booster().feature_names = train_features
+        fig, ax = plt.subplots()
+        plot_importance(model.model, ax=ax, importance_type='total_gain', show_values=False)
+        ax.set_title('Feature Importance (Total Gain)')
+        plt.tight_layout()
+        plt.savefig(f"plots/training/bdt_feature_importance_total_gain.png")
+
+        # Total cover
+        fig, ax = plt.subplots()
+        model.model.get_booster().feature_names = train_features
+        plot_importance(model.model, ax=ax, importance_type='total_cover', show_values=False)
+        ax.set_title('Feature Importance (Total Cover)')
+        plt.tight_layout()
+        plt.savefig(f"plots/training/bdt_feature_importance_total_cover.png")
+
+        # Total weight
+        fig, ax = plt.subplots()
+        model.model.get_booster().feature_names = train_features
+        plot_importance(model.model, ax=ax, importance_type='weight', show_values=False)
+        ax.set_title('Feature Importance (Weight)')
+        plt.tight_layout()
+        plt.savefig(f"plots/training/bdt_feature_importance_weight.png")
+
+        model.model.get_booster().feature_names = feature_names_orig 
 
 ############# Evaluation #################
 from scipy.optimize import curve_fit
