@@ -1,0 +1,42 @@
+# Features read from the ntuples 
+read_vars:
+  scalar_vars: ["HLT_IsoMu24", "nL1Mu", "nL1Jet", "nL1EG", "nJet"]
+  jagged_vars: 
+    Muon: ["pfIsoId", "mediumPromptId", "pt", "eta", "phi", "pdgId"]
+    Jet: ["pt", "eta", "phi", "neHEF", "neEmEF", "nConstituents", "muEF", "chHEF", "chMultiplicity", "chEmEF", "neMultiplicity"]
+    L1Mu: ["pt", "eta", "phi", "etaAtVtx", "phiAtVtx"]
+    L1Jet: ["pt", "eta", "phi"]
+    L1EG: ["pt", "eta", "phi", "hwIso"]
+    
+# Features used for training
+train_vars:
+  scalar_vars: []
+  jagged_vars: 
+    L1Jet: ["pt", "eta", "phi", "mureliso", "egreliso"]
+
+# Features used for plotting
+plot_vars:
+  scalar_vars: ["HLT_IsoMu24", "nL1Mu", "nL1Jet", "nL1EG", "nJet"]
+  jagged_vars:
+    L1Jet: ["pt", "eta", "phi", "mureliso", "egreliso"]
+
+# Target
+target_vars: ["ptratio"]
+
+# Variable to weight samples with (if it exists)
+weight_var: null 
+
+# Helper functions which are stored in the helper_funcs directory. Use for more complicated operations
+helper_funcs: 
+  helper_funcs.l1regression: ['muonjet_selection', 'match_l1_to_offline']
+
+# Filters (done before flattening)
+filters:
+  scalar_filters: ["nL1Jet > 0"]
+  jagged_filters: ["L1Jet.pt > 20", "L1Jet.eta > - 2.5", "L1Jet.eta < 2.5"]
+
+# Sort variables (done before flattening)
+sort_vars:
+  L1Jet:
+    var: "pt"
+    ascending: False
