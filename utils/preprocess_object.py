@@ -85,11 +85,11 @@ class Preprocessor():
         self.target_vars = config["target_vars"]
              
         # Debug
-        print(f"All read variables:", read_vars)
-        print(f"All train variables:", train_vars)
-        print(f"All plot variables:", plot_vars)
-        print(f"Inclusive set of variables:", all_vars)
-        print(f"Target variables:", self.target_vars)
+        #print(f"All read variables:", read_vars)
+        #print(f"All train variables:", train_vars)
+        #print(f"All plot variables:", plot_vars)
+        #print(f"Inclusive set of variables:", all_vars)
+        #print(f"Target variables:", self.target_vars)
     
     def __len__(self):
         return len(self.file_list)
