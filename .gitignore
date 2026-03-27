@@ -1,4 +1,8 @@
 #Ignore cache files
 *.pyc
 __pycache__
-cache*
+cache/
+condor_submission/
+outputs/
+plots/
+test/

@@ -256,7 +256,15 @@ if __name__ == "__main__":
     import glob
     sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
 
-    file_list = glob.glob(f"test/files/*.root")
+    # Local
+    #file_list = glob.glob(f"test/files/*.root")
+
+    # Remote
+    indir = "root://gfe02.grid.hep.ph.ic.ac.uk/pnfs/hep.ph.ic.ac.uk/data/cms//store/user/ppradeep/L1Scouting/WtoMuNu-4Jets_TuneCP5_13p6TeV_madgraphMLM-pythia8/Summer24NanoV15WithL1/251217_045803/0000"
+    file_list = os.popen(f"gfal-ls {indir}").read().strip().split("\n")
+    file_list = [f"{indir}/{file}" for file in file_list if "root" in file]
+    file_list = file_list[:3]
+
     print(f"Number of  files: {len(file_list)}")
     print(file_list)
 
@@ -264,7 +272,6 @@ if __name__ == "__main__":
     preprocessor = Preprocessor(file_list, "config/l1regression.yml", tree_name="Events", label=0, cache_dir=f"cache/test", use_existing_cache=False, batch_size=100000)
 
     preprocessor.cache_files()
-
     X,y,w = preprocessor.get_X_y_w()
 
     print(f"X: {X}")
